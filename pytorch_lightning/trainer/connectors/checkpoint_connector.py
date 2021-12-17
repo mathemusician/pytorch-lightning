@@ -159,6 +159,7 @@ class CheckpointConnector:
         # hook: give user access to checkpoint if needed.
         model.on_load_checkpoint(self._loaded_checkpoint)
 
+        # TODO: remove this in v1.8.
         # call hpc specific hook
         if self.hpc_resume_path is not None:
             model.on_hpc_load(self._loaded_checkpoint)
@@ -317,6 +318,7 @@ class CheckpointConnector:
         model = self.trainer.lightning_module
         checkpoint = self.dump_checkpoint()
 
+        # TODO: remove this in v1.8.
         model.on_hpc_save(checkpoint)
 
         # do the actual save
@@ -375,7 +377,7 @@ class CheckpointConnector:
             optimizer_states = []
             for i, optimizer in enumerate(self.trainer.optimizers):
                 # Rely on accelerator to dump optimizer state
-                optimizer_state = self.trainer.accelerator.optimizer_state(optimizer)
+                optimizer_state = self.trainer.training_type_plugin.optimizer_state(optimizer)
                 optimizer_states.append(optimizer_state)
 
             checkpoint["optimizer_states"] = optimizer_states
