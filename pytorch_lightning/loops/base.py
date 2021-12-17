@@ -22,7 +22,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.trainer.connectors.logger_connector.result import ResultCollection
 from pytorch_lightning.trainer.progress import BaseProgress
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from pytorch_lightning.utilities.imports import _fault_tolerant_training
 
 T = TypeVar("T")  # the output type of `run`
 
@@ -280,7 +279,7 @@ class Loop(ABC, Generic[T]):
                 destination[key] = v.state_dict()
             elif isinstance(v, Loop):
                 v.state_dict(destination, key + ".")
-            elif _fault_tolerant_training() and isinstance(v, ResultCollection):
+            elif isinstance(v, ResultCollection):
                 # sync / unsync metrics
                 v.sync()
                 destination[key] = v.state_dict()
