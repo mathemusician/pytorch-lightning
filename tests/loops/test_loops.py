@@ -213,7 +213,6 @@ def test_loop_restore():
     assert loop.outputs == list(range(10))
 
 
-@mock.patch.dict(os.environ, {"PL_FAULT_TOLERANT_TRAINING": "1"})
 def test_loop_hierarchy():
     @dataclass
     class SimpleProgress(BaseProgress):
