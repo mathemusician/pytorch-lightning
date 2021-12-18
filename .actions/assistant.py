@@ -38,5 +38,5 @@ class AssistantCLI:
             fp.writelines(lines)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     fire.Fire(AssistantCLI)
