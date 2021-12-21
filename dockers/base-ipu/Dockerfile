@@ -76,7 +76,7 @@ ENV \
 COPY ./requirements/extra.txt requirements-extra.txt
 COPY ./requirements/test.txt requirements-test.txt
 COPY ./requirements/adjust_versions.py adjust_versions.py
-COPY ./.actions/asssistant.py assistant.py
+COPY ./.actions/assistant.py assistant.py
 
 RUN \
     pip list | grep torch && \
