@@ -283,9 +283,6 @@ class FitLoop(Loop[None]):
         if self.epoch_loop._num_ready_batches_reached():
             self.epoch_loop.update_lr_schedulers("epoch", update_plateau_schedulers=True)
 
-            # FIXME: where should this go...
-            # self.batch_progress.current.reset()
-
         # TODO(@carmocca): remove this check after implementing `loop.stop()`
         if not self.trainer.should_stop:
             self.epoch_progress.increment_completed()

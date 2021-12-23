@@ -122,6 +122,12 @@ class TrainingEpochLoop(loops.Loop[_OUTPUTS_TYPE]):
             self.batch_progress.reset_on_restart()
             self.scheduler_progress.reset_on_restart()
             self.batch_loop.optimizer_loop.optim_progress.reset_on_restart()
+        # FIXME: fuck me this makes
+        # 1) test_restore::test_correct_step_and_epoch pass
+        # 2) test_model_checkpoint::test_checkpoint_repeated_strategy_extended fail
+        # 1) restarts after on_train_end (ce: 2, gs: 4) -> (ce: 4, gs: 8)
+        # 2) restarts after on_train_epoch_end (ce: 1, gs: 4) -> (ce: 2, gs: 4)
+        # if not self.restarting or self.done:
         else:
             self.batch_progress.reset_on_run()
             self.scheduler_progress.reset_on_run()
