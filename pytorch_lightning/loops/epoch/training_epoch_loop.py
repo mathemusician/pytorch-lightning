@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
 from collections import defaultdict
 from typing import Any, Dict, Generator, Iterator, List, Optional, overload, Tuple, Union
 
@@ -33,6 +34,9 @@ from pytorch_lightning.utilities.signature_utils import is_param_in_hook_signatu
 from pytorch_lightning.utilities.warnings import rank_zero_deprecation, WarningCache
 
 _OUTPUTS_TYPE = List[_BATCH_OUTPUTS_TYPE]
+
+
+log = logging.getLogger(__name__)
 
 
 class TrainingEpochLoop(loops.Loop[_OUTPUTS_TYPE]):
@@ -98,12 +102,16 @@ class TrainingEpochLoop(loops.Loop[_OUTPUTS_TYPE]):
 
     @property
     def done(self) -> bool:
-        """Returns whether the training should be stopped.
-
-        The criteria are that the number of steps reached the max steps, the last batch is reached or the trainer
-        signals to stop (e.g. by early stopping).
-        """
-        return (self._is_training_done and self._is_validation_done) or self.trainer.should_stop
+        """Evaluates when to leave the loop."""
+        should_stop = self.trainer.should_stop
+        if should_stop:
+            should_stop = self.global_step >= self.min_steps if self.min_steps else True
+            if not should_stop:
+                log.info(
+                    f"Trainer was signaled to stop but required minimum steps ({self.min_steps}) has not been met."
+                    " Training will continue..."
+                )
+        return (self._is_training_done and self._is_validation_done) or should_stop
 
     def connect(  # type: ignore[override]
         self,

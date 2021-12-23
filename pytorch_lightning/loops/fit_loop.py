@@ -149,30 +149,19 @@ class FitLoop(Loop[None]):
 
     @property
     def done(self) -> bool:
-        """Evaluates when to leave the loop.
-
-        Returns True if trainer.should_stop was set (e.g. by early stopping) or if the maximum number of steps or epochs
-        is reached.
-        """
+        """Evaluates when to leave the loop."""
         # TODO(@awaelchli): Move track steps inside training loop and move part of these condition inside training loop
         stop_steps = _is_max_limit_reached(self.global_step, self.max_steps)
         stop_epochs = _is_max_limit_reached(self.current_epoch, self.max_epochs)
 
-        should_stop = False
-        if self.trainer.should_stop:
-            # early stopping
-            met_min_epochs = self.current_epoch >= self.min_epochs if self.min_epochs else True
-            met_min_steps = self.global_step >= self.min_steps if self.min_steps else True
-            if met_min_epochs and met_min_steps:
-                should_stop = True
-            else:
+        should_stop = self.trainer.should_stop
+        if should_stop:
+            should_stop = self.current_epoch >= self.min_epochs if self.min_epochs else True
+            if not should_stop:
                 log.info(
-                    "Trainer was signaled to stop but required minimum epochs"
-                    f" ({self.min_epochs}) or minimum steps ({self.min_steps}) has"
-                    " not been met. Training will continue..."
+                    f"Trainer was signaled to stop but required minimum epochs ({self.min_epochs}) has not been met."
+                    " Training will continue..."
                 )
-        self.trainer.should_stop = should_stop
-
         return stop_steps or should_stop or stop_epochs or self.trainer.num_training_batches == 0
 
     @property
@@ -283,8 +272,9 @@ class FitLoop(Loop[None]):
         if self.epoch_loop._num_ready_batches_reached():
             self.epoch_loop.update_lr_schedulers("epoch", update_plateau_schedulers=True)
 
-        # TODO(@carmocca): remove this check after implementing `loop.stop()`
-        if not self.trainer.should_stop:
+            # TODO(@carmocca): remove this check after implementing `loop.stop()`. This is required by
+            # tests/loops/test_training_loop.py::test_should_stop_mid_epoch
+            # if not self.trainer.should_stop:
             self.epoch_progress.increment_completed()
 
         # the global step is manually decreased here due to backwards compatibility with existing loggers
