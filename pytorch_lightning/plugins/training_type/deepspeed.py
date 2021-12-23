@@ -28,10 +28,10 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 import pytorch_lightning as pl
 from pytorch_lightning.overrides.base import _LightningModuleWrapperBase
+from pytorch_lightning.plugins import CheckpointIO
 from pytorch_lightning.plugins.environments.cluster_environment import ClusterEnvironment
-from pytorch_lightning.plugins.io.checkpoint_plugin import CheckpointIO
 from pytorch_lightning.plugins.precision import PrecisionPlugin
-from pytorch_lightning.plugins.training_type.ddp import DDPPlugin
+from pytorch_lightning.plugins.training_type.ddp import DDPStrategy
 from pytorch_lightning.trainer.optimizers import _get_default_scheduler_config
 from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.utilities import GradClipAlgorithmType
@@ -82,7 +82,7 @@ class LightningDeepSpeedModule(_LightningModuleWrapperBase):
         return batch
 
 
-class DeepSpeedPlugin(DDPPlugin):
+class DeepSpeedStrategy(DDPStrategy):
     distributed_backend = _StrategyType.DEEPSPEED
     DEEPSPEED_ENV_VAR = "PL_DEEPSPEED_CONFIG_PATH"
 
@@ -136,7 +136,7 @@ class DeepSpeedPlugin(DDPPlugin):
         billion parameter models. `For more information: https://pytorch-
         lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#deepspeed`.
 
-        .. warning:: ``DeepSpeedPlugin`` is in beta and subject to change.
+        .. warning:: ``DeepSpeedStrategy`` is in beta and subject to change.
 
         Defaults have been set to enable ZeRO-Offload and some have been taken from the link below.
         These defaults have been set generally, but may require tuning for optimum performance based on your model size.
@@ -346,6 +346,14 @@ class DeepSpeedPlugin(DDPPlugin):
             self._format_config()
             self._config_initialized = True
 
+    def setup(self, trainer: "pl.Trainer") -> None:
+        self.accelerator.setup(trainer)
+        self.setup_optimizers(trainer)
+        self.setup_precision_plugin()
+        self._move_optimizer_state()
+        self.init_deepspeed()
+        self.barrier()
+
     def _init_deepspeed_distributed(self) -> None:
         if platform.system() != "Windows":
             # do not set env variables on windows, allow deepspeed to control setup
@@ -365,13 +373,8 @@ class DeepSpeedPlugin(DDPPlugin):
         os.environ["LOCAL_RANK"] = str(self.local_rank)
 
     @property
-    def restore_checkpoint_after_pre_dispatch(self) -> bool:
+    def restore_checkpoint_after_setup(self) -> bool:
         return True
-
-    def pre_dispatch(self, trainer: "pl.Trainer") -> None:
-        self._move_optimizer_state()
-        self.init_deepspeed()
-        self.barrier()
 
     def _setup_model_and_optimizers(self, model: Module, optimizers: List[Optimizer]) -> Tuple[Module, List[Optimizer]]:
         """Setup a model and multiple optimizers together.
@@ -616,7 +619,7 @@ class DeepSpeedPlugin(DDPPlugin):
                     deepspeed.utils.logging.logger.warning(
                         "Tried to infer the batch size for internal deepspeed logging from the `train_dataloader()`. "
                         "To ensure DeepSpeed logging remains correct, please manually pass the plugin with the "
-                        "batch size, `Trainer(strategy=DeepSpeedPlugin(logging_batch_size_per_gpu=batch_size))`."
+                        "batch size, `Trainer(strategy=DeepSpeedStrategy(logging_batch_size_per_gpu=batch_size))`."
                     )
         return batch_size
 
@@ -752,7 +755,7 @@ class DeepSpeedPlugin(DDPPlugin):
         if client_state is None:
             raise MisconfigurationException(
                 "DeepSpeed was unable to load the checkpoint. Ensure you passed in a DeepSpeed compatible checkpoint "
-                "or a single checkpoint file with `Trainer(strategy=DeepSpeedPlugin(load_full_weights=True))`."
+                "or a single checkpoint file with `Trainer(strategy=DeepSpeedStrategy(load_full_weights=True))`."
             )
         return client_state
 
@@ -854,13 +857,11 @@ class DeepSpeedPlugin(DDPPlugin):
             offload_optimizer_device="nvme",
         )
 
-    @property
-    def checkpoint_io(self) -> CheckpointIO:
-        return self._checkpoint_io
-
-    @checkpoint_io.setter
-    def checkpoint_io(self, plugin: CheckpointIO) -> None:
-        raise MisconfigurationException("DeepSpeed currently does not support custom checkpoint plugins.")
+    @DDPStrategy.checkpoint_io.setter
+    def checkpoint_io(self, io: Optional[CheckpointIO]) -> None:
+        if io is not None:
+            raise MisconfigurationException("DeepSpeed does not support custom `CheckpointIO` plugin.")
+        self._checkpoint_io = io
 
     def validation_step(self, *args, **kwargs) -> Optional[STEP_OUTPUT]:
         with self.precision_plugin.val_step_context():

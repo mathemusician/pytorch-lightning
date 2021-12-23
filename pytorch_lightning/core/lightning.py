@@ -1564,14 +1564,14 @@ class LightningModule(
                 using_native_amp,
                 using_lbfgs,
             ):
-                # warm up lr
+                # update params
+                optimizer.step(closure=optimizer_closure)
+
+                # manually warm up lr without a scheduler
                 if self.trainer.global_step < 500:
                     lr_scale = min(1.0, float(self.trainer.global_step + 1) / 500.0)
                     for pg in optimizer.param_groups:
                         pg["lr"] = lr_scale * self.learning_rate
-
-                # update params
-                optimizer.step(closure=optimizer_closure)
 
         """
         optimizer.step(closure=optimizer_closure)
@@ -1926,7 +1926,7 @@ class LightningModule(
             queue: the instance of the queue to append the data.
 
         .. deprecated:: v1.5
-            This method was deprecated in v1.5 in favor of `DDPSpawnPlugin.add_to_queue`
+            This method was deprecated in v1.5 in favor of `DDPSpawnStrategy.add_to_queue`
             and will be removed in v1.7.
         """
 
@@ -1938,7 +1938,7 @@ class LightningModule(
             queue: the instance of the queue from where to get the data.
 
         .. deprecated:: v1.5
-            This method was deprecated in v1.5 in favor of `DDPSpawnPlugin.get_from_queue`
+            This method was deprecated in v1.5 in favor of `DDPSpawnStrategy.get_from_queue`
             and will be removed in v1.7.
         """
 
