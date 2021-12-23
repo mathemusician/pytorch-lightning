@@ -126,14 +126,8 @@ def test_timer_zero_duration_stop(tmpdir, interval):
     timer = Timer(duration=duration, interval=interval)
     trainer = Trainer(default_root_dir=tmpdir, callbacks=[timer])
     trainer.fit(model)
-    if interval == "step":
-        # timer triggers stop on step end
-        assert trainer.global_step == 0
-        assert trainer.current_epoch == 0
-    else:
-        # timer triggers stop on epoch end
-        assert trainer.global_step == len(trainer.train_dataloader)
-        assert trainer.current_epoch == 0
+    assert trainer.global_step == 0
+    assert trainer.current_epoch == 0
 
 
 @pytest.mark.parametrize("min_steps,min_epochs", [(None, 2), (3, None), (3, 2)])
