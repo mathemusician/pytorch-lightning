@@ -23,6 +23,7 @@ from pytorch_lightning.trainer.connectors.logger_connector.result import _Result
 from pytorch_lightning.trainer.progress import BaseProgress
 from pytorch_lightning.utilities.enums import _FaultTolerantMode
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from pytorch_lightning.utilities.imports import _fault_tolerant_training
 
 T = TypeVar("T")  # the output type of `run`
 
@@ -335,4 +336,5 @@ class Loop(ABC, Generic[T]):
                     v.reset(metrics=False)
 
         self.on_load_checkpoint(state_dict[prefix + "state_dict"])
-        self.restarting = True
+        if _fault_tolerant_training():
+            self.restarting = True
