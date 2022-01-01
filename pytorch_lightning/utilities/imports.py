@@ -35,11 +35,7 @@ def _module_available(module_path: str) -> bool:
     """
     try:
         return find_spec(module_path) is not None
-    except AttributeError:
-        # Python 3.6
-        return False
     except ModuleNotFoundError:
-        # Python 3.7+
         return False
 
 
@@ -93,6 +89,7 @@ _POPTORCH_AVAILABLE = _module_available("poptorch")
 _RICH_AVAILABLE = _module_available("rich") and _compare_version("rich", operator.ge, "10.2.2")
 _TORCH_QUANTIZE_AVAILABLE = bool([eg for eg in torch.backends.quantized.supported_engines if eg != "none"])
 _TORCHTEXT_AVAILABLE = _module_available("torchtext")
+_TORCHTEXT_LEGACY: bool = _TORCHTEXT_AVAILABLE and _compare_version("torchtext", operator.lt, "0.11.0")
 _TORCHVISION_AVAILABLE = _module_available("torchvision")
 _XLA_AVAILABLE: bool = _module_available("torch_xla")
 
