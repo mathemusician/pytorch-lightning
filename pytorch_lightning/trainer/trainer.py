@@ -40,15 +40,12 @@ from pytorch_lightning.loggers.tensorboard import TensorBoardLogger
 from pytorch_lightning.loops import PredictionLoop, TrainingEpochLoop
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
-from pytorch_lightning.loops.utilities import _parse_loop_limits
+from pytorch_lightning.loops.utilities import _parse_loop_limits, _reset_progress
 from pytorch_lightning.plugins import (
     ApexMixedPrecisionPlugin,
-    DDPSpawnStrategy,
     NativeMixedPrecisionPlugin,
-    ParallelStrategy,
     PLUGIN_INPUT,
     PrecisionPlugin,
-    Strategy,
 )
 from pytorch_lightning.plugins.environments.slurm_environment import SLURMEnvironment
 from pytorch_lightning.profiler import (
@@ -59,7 +56,8 @@ from pytorch_lightning.profiler import (
     SimpleProfiler,
     XLAProfiler,
 )
-from pytorch_lightning.strategies.ddp_spawn import _SpawnOutput
+from pytorch_lightning.strategies import ParallelStrategy, Strategy
+from pytorch_lightning.strategies.ddp_spawn import _SpawnOutput, DDPSpawnStrategy
 from pytorch_lightning.trainer.callback_hook import TrainerCallbackHookMixin
 from pytorch_lightning.trainer.configuration_validator import verify_loop_configurations
 from pytorch_lightning.trainer.connectors.accelerator_connector import AcceleratorConnector
@@ -658,6 +656,8 @@ class Trainer(
         self.num_val_batches = []
         self.test_dataloaders = None
         self.val_dataloaders = None
+        self._last_train_dl_reload_epoch = float("-inf")
+        self._last_val_dl_reload_epoch = float("-inf")
 
         self.num_predict_batches = []
 
@@ -743,6 +743,8 @@ class Trainer(
         self.state.fn = TrainerFn.FITTING
         self.state.status = TrainerStatus.RUNNING
         self.training = True
+        self._last_train_dl_reload_epoch = float("-inf")
+        self._last_val_dl_reload_epoch = float("-inf")
 
         # if a datamodule comes in as the second arg, then fix it for the user
         if isinstance(train_dataloaders, LightningDataModule):
@@ -1350,11 +1352,9 @@ class Trainer(
             self.logger_connector.reset_results()
             self.logger_connector.reset_metrics()
 
-            # TODO(@carmocca): This should apply to all sub-loops, all progress instances and reset both
-            # current and total for progress tracking
-            val_loop.dataloader_progress.reset_on_run()
-            val_loop.epoch_loop.batch_progress.reset_on_run()
-            val_loop.epoch_loop.batch_progress.total.reset()
+            # reset the progress tracking state after sanity checking. we don't need to set the state before
+            # because sanity check only runs when we are not restarting
+            _reset_progress(val_loop)
 
             # reset the seed to what it was before sanity check
             # prevents sanity check to affect random sampling in training
@@ -1786,7 +1786,7 @@ class Trainer(
             "`Trainer.should_rank_save_checkpoint` is deprecated in v1.6 and will be removed in v1.8.", stacklevel=5
         )
         ttp = self.strategy
-        return isinstance(ttp, pl.plugins.TPUSpawnStrategy) and ttp.local_rank == 0 or ttp.is_global_zero
+        return isinstance(ttp, pl.strategies.TPUSpawnStrategy) and ttp.local_rank == 0 or ttp.is_global_zero
 
     @property
     def _distrib_type(self) -> _StrategyType:
@@ -1964,12 +1964,6 @@ class Trainer(
         if self.progress_bar_callback:
             return self.progress_bar_callback.get_metrics(self, ref_model)
         return self.progress_bar_metrics
-
-    @property
-    def _should_reload_dl_epoch(self) -> bool:
-        """Check if dataloader should be reloaded in the current epoch."""
-        n_epochs = self.reload_dataloaders_every_n_epochs
-        return n_epochs and (not self.current_epoch % n_epochs)
 
     @property
     def enable_validation(self) -> bool:
