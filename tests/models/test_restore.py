@@ -234,6 +234,7 @@ def test_correct_step_and_epoch(tmpdir):
     assert trainer.current_epoch == first_max_epochs
     assert trainer.global_step == first_max_epochs * train_batches
 
+    # save checkpoint after loop ends, training end called, epoch count increased
     ckpt_path = str(tmpdir / "model.ckpt")
     trainer.save_checkpoint(ckpt_path)
 
