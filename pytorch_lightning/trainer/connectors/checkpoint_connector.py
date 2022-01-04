@@ -212,6 +212,7 @@ class CheckpointConnector:
             return
 
         self.trainer.fit_loop.global_step = self._loaded_checkpoint["global_step"]
+        # FIXME: keep in mind old checkpoints without progress tracking
         self.trainer.fit_loop.current_epoch = self._loaded_checkpoint["epoch"]
 
         assert self.trainer.state.fn is not None
@@ -321,16 +322,11 @@ class CheckpointConnector:
                 LightningDataModule.__class__.__name__: pl DataModule's state
             }
         """
-
-        # dump epoch/global_step/pytorch-lightning_version
-        current_epoch = self.trainer.current_epoch
-        global_step = self.trainer.global_step + 1
-
         model = self.trainer.lightning_module
 
         checkpoint = {
-            "epoch": current_epoch,
-            "global_step": global_step,
+            "epoch": self.trainer.current_epoch,
+            "global_step": self.trainer.global_step + 1,
             "pytorch-lightning_version": pl.__version__,
             "state_dict": self._get_lightning_module_state_dict(),
             "loops": self._get_loops_state_dict(),
