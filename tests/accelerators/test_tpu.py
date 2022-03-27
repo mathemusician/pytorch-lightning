@@ -189,8 +189,7 @@ def test_manual_optimization_tpus(tmpdir):
         limit_train_batches=5,
         limit_test_batches=0,
         limit_val_batches=0,
-        accelerator="tpu",
-        devices=8,
+        tpu_cores=8,
     )
     trainer.fit(model)
 
@@ -230,7 +229,7 @@ def test_auto_parameters_tying_tpus(tmpdir):
 
     assert shared_params[0] == ["layer_1.weight", "layer_3.weight"]
 
-    trainer = Trainer(default_root_dir=tmpdir, limit_train_batches=5, accelerator="tpu", devices=8, max_epochs=1)
+    trainer = Trainer(default_root_dir=tmpdir, limit_train_batches=5, tpu_cores=8, max_epochs=1)
     trainer.fit(model)
 
     assert torch.all(torch.eq(model.layer_1.weight, model.layer_3.weight))
@@ -262,7 +261,7 @@ def test_auto_parameters_tying_tpus_nested_module(tmpdir):
 
     model = NestedModule()
 
-    trainer = Trainer(default_root_dir=tmpdir, limit_train_batches=5, accelerator="tpu", devices=8, max_epochs=1)
+    trainer = Trainer(default_root_dir=tmpdir, limit_train_batches=5, tpu_cores=8, max_epochs=1)
     trainer.fit(model)
 
     assert torch.all(torch.eq(model.net_a.layer.weight, model.net_b.layer.weight))
@@ -296,7 +295,7 @@ def test_tpu_invalid_raises_set_precision_with_strategy():
 
 @RunIf(tpu=True)
 def test_xla_checkpoint_plugin_being_default():
-    trainer = Trainer(accelerator="tpu", devices=8)
+    trainer = Trainer(tpu_cores=8)
     assert isinstance(trainer.strategy.checkpoint_io, XLACheckpointIO)
 
 

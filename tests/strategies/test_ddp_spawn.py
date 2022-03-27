@@ -32,8 +32,7 @@ def test_multi_gpu_early_stop_ddp_spawn(tmpdir):
         max_epochs=50,
         limit_train_batches=10,
         limit_val_batches=10,
-        accelerator="gpu",
-        devices=[0, 1],
+        gpus=[0, 1],
         strategy="ddp_spawn",
     )
 
@@ -51,8 +50,7 @@ def test_multi_gpu_model_ddp_spawn(tmpdir):
         max_epochs=1,
         limit_train_batches=10,
         limit_val_batches=10,
-        accelerator="gpu",
-        devices=[0, 1],
+        gpus=[0, 1],
         strategy="ddp_spawn",
         enable_progress_bar=False,
     )
@@ -78,8 +76,7 @@ def test_ddp_all_dataloaders_passed_to_fit(tmpdir):
         max_epochs=1,
         limit_train_batches=0.2,
         limit_val_batches=0.2,
-        accelerator="gpu",
-        devices=[0, 1],
+        gpus=[0, 1],
         strategy="ddp_spawn",
     )
     trainer.fit(model, train_dataloaders=model.train_dataloader(), val_dataloaders=model.val_dataloader())

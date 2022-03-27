@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from torch.utils.data import DistributedSampler
 
 from pytorch_lightning import Callback, seed_everything, Trainer
-from pytorch_lightning.accelerators import IPUAccelerator
+from pytorch_lightning.accelerators import CPUAccelerator, IPUAccelerator
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning.plugins import IPUPrecisionPlugin
 from pytorch_lightning.strategies.ipu import IPUStrategy
@@ -110,7 +110,9 @@ def test_fail_if_no_ipus(mock_ipu_acc_avail, tmpdir):
 @RunIf(ipu=True)
 def test_accelerator_selected(tmpdir):
     assert IPUAccelerator.is_available()
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=1)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1)
+    assert isinstance(trainer.accelerator, IPUAccelerator)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1, accelerator="ipu")
     assert isinstance(trainer.accelerator, IPUAccelerator)
 
 
@@ -128,10 +130,10 @@ def test_no_warning_plugin(tmpdir):
 
 
 @RunIf(ipu=True)
-@pytest.mark.parametrize("devices", [1, 4])
-def test_all_stages(tmpdir, devices):
+@pytest.mark.parametrize("ipus", [1, 4])
+def test_all_stages(tmpdir, ipus):
     model = IPUModel()
-    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, accelerator="ipu", devices=devices)
+    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, ipus=ipus)
     trainer.fit(model)
     trainer.validate(model)
     trainer.test(model)
@@ -139,11 +141,11 @@ def test_all_stages(tmpdir, devices):
 
 
 @RunIf(ipu=True)
-@pytest.mark.parametrize("devices", [1, 4])
-def test_inference_only(tmpdir, devices):
+@pytest.mark.parametrize("ipus", [1, 4])
+def test_inference_only(tmpdir, ipus):
     model = IPUModel()
 
-    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, accelerator="ipu", devices=devices)
+    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, ipus=ipus)
     trainer.validate(model)
     trainer.test(model)
     trainer.predict(model)
@@ -156,7 +158,7 @@ def test_optimization(tmpdir):
     dm = ClassifDataModule(length=1024)
     model = IPUClassificationModel()
 
-    trainer = Trainer(default_root_dir=tmpdir, max_epochs=1, accelerator="ipu", devices=2)
+    trainer = Trainer(default_root_dir=tmpdir, max_epochs=1, ipus=2)
 
     # fit model
     trainer.fit(model, dm)
@@ -180,7 +182,7 @@ def test_optimization(tmpdir):
 
     model = IPUClassificationModel.load_from_checkpoint(model_path)
 
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=2)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=2)
 
     result = trainer.test(model, datamodule=dm)
     saved_result = result[0]["test_acc"]
@@ -195,9 +197,7 @@ def test_mixed_precision(tmpdir):
             raise SystemExit
 
     model = IPUModel()
-    trainer = Trainer(
-        default_root_dir=tmpdir, fast_dev_run=True, accelerator="ipu", devices=1, precision=16, callbacks=TestCallback()
-    )
+    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, ipus=1, precision=16, callbacks=TestCallback())
     assert isinstance(trainer.strategy.precision_plugin, IPUPrecisionPlugin)
     assert trainer.strategy.precision_plugin.precision == 16
     with pytest.raises(SystemExit):
@@ -215,9 +215,7 @@ def test_pure_half_precision(tmpdir):
 
     model = IPUModel()
     model = model.half()
-    trainer = Trainer(
-        default_root_dir=tmpdir, fast_dev_run=True, accelerator="ipu", devices=1, precision=16, callbacks=TestCallback()
-    )
+    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, ipus=1, precision=16, callbacks=TestCallback())
 
     assert isinstance(trainer.strategy, IPUStrategy)
     assert isinstance(trainer.strategy.precision_plugin, IPUPrecisionPlugin)
@@ -241,8 +239,7 @@ def test_device_iterations_ipu_plugin(tmpdir):
     trainer = Trainer(
         default_root_dir=tmpdir,
         fast_dev_run=True,
-        accelerator="ipu",
-        devices=1,
+        ipus=1,
         strategy=IPUStrategy(device_iterations=2),
         callbacks=TestCallback(),
     )
@@ -265,12 +262,7 @@ def test_accumulated_batches(tmpdir):
 
     model = IPUModel()
     trainer = Trainer(
-        default_root_dir=tmpdir,
-        fast_dev_run=True,
-        accelerator="ipu",
-        devices=1,
-        accumulate_grad_batches=2,
-        callbacks=TestCallback(),
+        default_root_dir=tmpdir, fast_dev_run=True, ipus=1, accumulate_grad_batches=2, callbacks=TestCallback()
     )
     with pytest.raises(SystemExit):
         trainer.fit(model)
@@ -313,9 +305,7 @@ def test_stages_correct(tmpdir):
             assert torch.all(outputs == 4).item()
 
     model = StageModel()
-    trainer = Trainer(
-        default_root_dir=tmpdir, fast_dev_run=True, accelerator="ipu", devices=1, callbacks=TestCallback()
-    )
+    trainer = Trainer(default_root_dir=tmpdir, fast_dev_run=True, ipus=1, callbacks=TestCallback())
     trainer.fit(model)
     trainer.test(model)
     trainer.validate(model)
@@ -325,7 +315,7 @@ def test_stages_correct(tmpdir):
 @RunIf(ipu=True)
 def test_different_accumulate_grad_batches_fails(tmpdir):
     model = IPUModel()
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=1, accumulate_grad_batches={1: 2})
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1, accumulate_grad_batches={1: 2})
     with pytest.raises(
         MisconfigurationException, match="IPUs currently does not support different `accumulate_grad_batches`"
     ):
@@ -335,7 +325,7 @@ def test_different_accumulate_grad_batches_fails(tmpdir):
 @RunIf(ipu=True)
 def test_clip_gradients_fails(tmpdir):
     model = IPUModel()
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=1, gradient_clip_val=10)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1, gradient_clip_val=10)
     with pytest.raises(MisconfigurationException, match="IPUs currently do not support clipping gradients."):
         trainer.fit(model)
 
@@ -347,8 +337,7 @@ def test_autoreport(tmpdir):
     autoreport_path = os.path.join(tmpdir, "report/")
     trainer = Trainer(
         default_root_dir=tmpdir,
-        accelerator="ipu",
-        devices=1,
+        ipus=1,
         fast_dev_run=True,
         strategy=IPUStrategy(autoreport=True, autoreport_dir=autoreport_path),
     )
@@ -474,7 +463,7 @@ def test_replication_factor(tmpdir):
     dataloaders."""
 
     plugin = IPUStrategy()
-    trainer = Trainer(accelerator="ipu", devices=2, default_root_dir=tmpdir, fast_dev_run=True, strategy=plugin)
+    trainer = Trainer(ipus=2, default_root_dir=tmpdir, fast_dev_run=True, strategy=plugin)
     assert isinstance(trainer.accelerator, IPUAccelerator)
     assert trainer.num_devices == 2
     assert trainer.strategy.replication_factor == 2
@@ -486,7 +475,7 @@ def test_replication_factor(tmpdir):
     inference_opts.replicationFactor(7)
     plugin = IPUStrategy(inference_opts=inference_opts, training_opts=training_opts)
 
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=1, strategy=plugin)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1, strategy=plugin)
     trainer.optimizers = model.configure_optimizers()[0]
     plugin.model = model
     model.trainer = trainer
@@ -515,7 +504,7 @@ def test_default_opts(tmpdir):
 
     model = IPUModel()
 
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=1, fast_dev_run=True)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1, fast_dev_run=True)
     trainer.fit(model)
     assert isinstance(trainer.strategy, IPUStrategy)
     inference_opts = trainer.strategy.inference_opts
@@ -537,7 +526,7 @@ def test_multi_optimizers_fails(tmpdir):
 
     model = TestModel()
 
-    trainer = Trainer(default_root_dir=tmpdir, accelerator="ipu", devices=1)
+    trainer = Trainer(default_root_dir=tmpdir, ipus=1)
     with pytest.raises(MisconfigurationException, match="IPUs currently only support one optimizer."):
         trainer.fit(model)
 
@@ -563,9 +552,16 @@ def test_accelerator_ipu():
 
 
 @RunIf(ipu=True)
+def test_accelerator_cpu_with_ipus_flag():
+    trainer = Trainer(accelerator="cpu", ipus=1)
+    assert isinstance(trainer.accelerator, CPUAccelerator)
+
+
+@RunIf(ipu=True)
 def test_accelerator_ipu_with_devices():
 
     trainer = Trainer(accelerator="ipu", devices=8)
+
     assert isinstance(trainer.strategy, IPUStrategy)
     assert isinstance(trainer.accelerator, IPUAccelerator)
     assert trainer.num_devices == 8
@@ -605,7 +601,7 @@ def test_strategy_choice_ipu_plugin(tmpdir):
 
 @RunIf(ipu=True)
 def test_device_type_when_training_plugin_ipu_passed(tmpdir):
-    trainer = Trainer(strategy=IPUStrategy(), accelerator="ipu", devices=8)
+    trainer = Trainer(strategy=IPUStrategy(), ipus=8)
     assert isinstance(trainer.strategy, IPUStrategy)
     assert isinstance(trainer.accelerator, IPUAccelerator)
 
@@ -613,7 +609,7 @@ def test_device_type_when_training_plugin_ipu_passed(tmpdir):
 @RunIf(ipu=True)
 def test_poptorch_models_at_different_stages(tmpdir):
     plugin = IPUStrategy()
-    trainer = Trainer(default_root_dir=tmpdir, strategy=plugin, accelerator="ipu", devices=8)
+    trainer = Trainer(default_root_dir=tmpdir, strategy=plugin, ipus=8)
     model = BoringModel()
     model.trainer = trainer
     plugin.model = model
